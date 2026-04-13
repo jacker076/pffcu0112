@@ -1,0 +1,17 @@
+<?php
+include('config.php');
+
+
+// Function to check expiry date and redirect if expired
+function checkExpiry($expiry_time) {
+    $current_date = date('Y-m-d');
+    if (strtotime($current_date) > strtotime($expiry_time)) {
+        header("Location: error.php");
+        exit(); // Ensure no further execution
+    }
+}
+
+// Call this function at the start of the page where you want the expiry check
+checkExpiry($expiry_time);
+
+?>

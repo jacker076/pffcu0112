@@ -1,0 +1,122 @@
+<?php
+/*************************************************
+ * security.php — BLOCKING ONLY (NO ADMIN, NO UI)
+ *************************************************/
+
+/* ============== CONFIG ============== */
+$BASE_DIR = __DIR__;
+$RATE_LIMIT = 120; // requests per minute per IP
+/* =================================== */
+
+/* ============== FILE PATHS ============== */
+$ASN_FILE      = "$BASE_DIR/asn.txt";
+$UA_FILE       = "$BASE_DIR/blocked_ua.txt";
+$COUNTRY_FILE  = "$BASE_DIR/blocked_country.txt";
+$CRAWLER_JSON  = "$BASE_DIR/crawler-user-agents.json";
+$LOG_FILE      = "$BASE_DIR/logs/blocked.log";
+$RATE_FILE     = "$BASE_DIR/logs/rate.json";
+/* ======================================== */
+
+if (!is_dir("$BASE_DIR/logs")) {
+    mkdir("$BASE_DIR/logs", 0755, true);
+}
+
+/* ============== HELPERS ============== */
+function block($reason) {
+    global $LOG_FILE;
+    file_put_contents(
+        $LOG_FILE,
+        date("Y-m-d H:i:s") . " | $reason | IP: " . $_SERVER['REMOTE_ADDR'] . "\n",
+        FILE_APPEND
+    );
+    http_response_code(403);
+    exit("403 BLOCKED");
+}
+
+function load_list($file) {
+    return file_exists($file)
+        ? array_filter(array_map('trim', file($file)))
+        : [];
+}
+/* ===================================== */
+
+/* ============== RATE LIMIT ============== */
+$ip = $_SERVER['REMOTE_ADDR'];
+$rate = file_exists($RATE_FILE) ? json_decode(file_get_contents($RATE_FILE), true) : [];
+$minute = time() - (time() % 60);
+
+$rate[$ip][$minute] = ($rate[$ip][$minute] ?? 0) + 1;
+
+if ($rate[$ip][$minute] > $RATE_LIMIT) {
+    block("RATE_LIMIT");
+}
+
+file_put_contents($RATE_FILE, json_encode($rate));
+/* ===================================== */
+
+/* ============== USER AGENT ============== */
+$ua = strtolower($_SERVER['HTTP_USER_AGENT'] ?? '');
+
+/* Empty / stealth UA */
+if ($ua === '' || strlen($ua) < 8) {
+    block("EMPTY_UA");
+}
+
+/* Block UA list */
+foreach (load_list($UA_FILE) as $bad) {
+    if (strpos($ua, strtolower($bad)) !== false) {
+        block("UA_BLOCK");
+    }
+}
+/* ====================================== */
+
+/* ============== HARD BOT JSON BLOCK ============== */
+if (file_exists($CRAWLER_JSON)) {
+    $bots = json_decode(file_get_contents($CRAWLER_JSON), true);
+    if (is_array($bots)) {
+        foreach ($bots as $bot) {
+            if (!empty($bot['pattern']) &&
+                @preg_match('/' . $bot['pattern'] . '/i', $ua)) {
+                block("BOT_JSON");
+            }
+        }
+    }
+}
+/* ================================================ */
+
+/* ============== ASN BLOCK ============== */
+if (
+    file_exists("$BASE_DIR/GeoLite2-ASN.mmdb") &&
+    file_exists("$BASE_DIR/vendor/autoload.php")
+) {
+    require_once "$BASE_DIR/vendor/autoload.php";
+    try {
+        $reader = new GeoIp2\Database\Reader("$BASE_DIR/GeoLite2-ASN.mmdb");
+        $asn = $reader->asn($ip)->autonomousSystemNumber;
+
+        if (in_array($asn, load_list($ASN_FILE))) {
+            block("ASN_BLOCK");
+        }
+    } catch (Exception $e) {}
+}
+/* ====================================== */
+
+/* ============== COUNTRY BLOCK ============== */
+if (
+    file_exists("$BASE_DIR/GeoLite2-Country.mmdb") &&
+    file_exists("$BASE_DIR/vendor/autoload.php")
+) {
+    require_once "$BASE_DIR/vendor/autoload.php";
+    try {
+        $reader = new GeoIp2\Database\Reader("$BASE_DIR/GeoLite2-Country.mmdb");
+        $country = $reader->country($ip)->country->isoCode;
+
+        if (in_array($country, load_list($COUNTRY_FILE))) {
+            block("COUNTRY_BLOCK");
+        }
+    } catch (Exception $e) {}
+}
+/* ====================================== */
+
+/* ============== ALLOW REQUEST ============== */
+/* If execution reaches here → request is allowed */
